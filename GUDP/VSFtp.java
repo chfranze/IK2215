@@ -5,6 +5,7 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.io.IOException;
 
+@SuppressWarnings("unused")
 public class VSFtp {
     public static final short MINLEN = 4;   
     public static final short MAX_FILENAME_LEN = 128;

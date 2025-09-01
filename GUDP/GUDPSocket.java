@@ -3,6 +3,7 @@ import java.net.DatagramSocket;
 import java.io.IOException;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
+//@SuppressWarnings("unused")
 public class GUDPSocket implements GUDPSocketAPI {
     DatagramSocket datagramSocket; // a socket for sending and receiving datagram packets
     ConcurrentLinkedQueue<GUDPEndPoint> senderQueue; // the send queues, one element per destination (remoteEndPoint)

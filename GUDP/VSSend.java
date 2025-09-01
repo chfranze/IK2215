@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.ArrayList;
 
+@SuppressWarnings("unused")
 class VSFtpSender implements Runnable {
     private GUDPSocket gUdpSocket;
     private ArrayList<InetSocketAddress> destSocketAddresses;
@@ -28,6 +29,7 @@ class VSFtpSender implements Runnable {
         }
     }
 
+    @SuppressWarnings("resource")
     private void sendFile(String fileName) throws IOException {
         FileInputStream inputStream = new FileInputStream(fileName);
         VSFtp vsBegin = new VSFtp(VSFtp.TYPE_BEGIN, fileName);
@@ -92,7 +94,7 @@ public class VSSend {
             index++;
         }
         fileNames = Arrays.copyOfRange(args, index, args.length);
-        for (String s: fileNames)
+        for (@SuppressWarnings("unused") String s: fileNames)
         if (destSocketAddresses.size() == 0 || fileNames.length == 0)
             usage();
     }

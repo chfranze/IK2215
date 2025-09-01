@@ -6,6 +6,7 @@ import java.net.InetSocketAddress;
 import java.util.TimerTask;
 import java.util.Timer;
 
+@SuppressWarnings("unused")
 class GUDPEndPoint {
     /* Pre-defined constant values for key variables */
     public static final int MAX_WINDOW_SIZE = 3;

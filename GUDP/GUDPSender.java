@@ -8,6 +8,7 @@ import java.util.Iterator;
 /*
  * GUDPSender monitors send queues and sends packets whenever there are packets in the queues
  */
+@SuppressWarnings("unused")
 public class GUDPSender extends Thread {
     private final DatagramSocket sock;
     private final ConcurrentLinkedQueue<GUDPEndPoint> senderQueue;
@@ -59,6 +60,7 @@ public class GUDPSender extends Thread {
 	System.out.println("GUDPSender ended");
     } /* public void run() */
 
+    @SuppressWarnings("incomplete-switch")
     public void FSMSender(GUDPEndPoint endPoint) {
         /* 
 	 * FSM for GBN Sender

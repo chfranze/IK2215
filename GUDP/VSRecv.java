@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.ArrayList;
 
+@SuppressWarnings("unused")
 class ReceiveContext {
     private InetSocketAddress sockaddr;
     private enum State {NONE, OPEN, CLOSED};
@@ -102,6 +103,7 @@ class ReceiveContext {
     }
 }
 
+@SuppressWarnings("unused")
 class VSFtpReceiver implements Runnable {
     private GUDPSocket gUdpSocket;
     private ArrayList<ReceiveContext> receiveContexts = new ArrayList<ReceiveContext>();

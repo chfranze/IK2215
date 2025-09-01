@@ -71,6 +71,7 @@ public class GUDPPacket {
 
     public DatagramPacket pack() throws IOException {
         int totlength = HEADER_SIZE + getPayloadLength();
+        @SuppressWarnings("unused")
         InetSocketAddress socketAddress = getSocketAddress();
         return new DatagramPacket(getBytes(), totlength, sockaddr);
     }

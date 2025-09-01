@@ -12,6 +12,7 @@ import java.util.Iterator;
  * GUDPReceiver is a non-static nested class (inner class)
  * GUDPReceiver receives incoming packets from remote hosts and put them in the receiverQueue.
  */
+@SuppressWarnings("unused")
 public class GUDPReceiver extends Thread {
     private final DatagramSocket sock;
     private final ConcurrentLinkedQueue<GUDPEndPoint> receiverQueue;
