@@ -20,6 +20,9 @@ public class GUDPSocket implements GUDPSocketAPI {
     // ACK timeout value in milliseconds
     private final int ACK_TIMEOUT = 500;
 
+    // Sleep time for receive() when no packet is in the receiverQueue
+    private final int SLEEP_TIME = 50;
+
     public GUDPSocket(DatagramSocket socket) {
         datagramSocket = socket;
         /*
@@ -97,11 +100,11 @@ public class GUDPSocket implements GUDPSocketAPI {
          * after that set startSender and startReceiver to true
          */
 
-        if (!startSender) {
+        if (startSender == false) {
             s.start();
             startSender = true;
         }
-        if (!startReceiver) {
+        if (startReceiver == false) {
             r.start();
             startReceiver = true;
         }
@@ -116,17 +119,22 @@ public class GUDPSocket implements GUDPSocketAPI {
          * However, you must comment out these five lines and write your own code
          * to let GUDPReceiver thread receives packets instead of receive()
          */
-        byte[] buf = new byte[GUDPPacket.MAX_DATAGRAM_LEN];
-        DatagramPacket udppacket = new DatagramPacket(buf, buf.length);
-        datagramSocket.receive(udppacket);
-        GUDPPacket gudppacket = GUDPPacket.unpack(udppacket);
-        gudppacket.decapsulate(packet);
+        // byte[] buf = new byte[GUDPPacket.MAX_DATAGRAM_LEN];
+        // DatagramPacket udppacket = new DatagramPacket(buf, buf.length);
+        // datagramSocket.receive(udppacket);
+        // GUDPPacket gudppacket = GUDPPacket.unpack(udppacket);
+        // gudppacket.decapsulate(packet);
 
         /*
          * start the GUDPReceiver thread if it is not running (i.e, startReceiver is
          * false)
          * after that set startReceiver to true
          */
+
+        if (startReceiver == false) {
+            r.start();
+            startReceiver = true;
+        }
 
         /*
          * iterate through the receiverQueue to fetch a packet from an exsiting end
@@ -135,6 +143,10 @@ public class GUDPSocket implements GUDPSocketAPI {
          * to wait for a packet to arrive before iterating through the receiverQueue
          * again
          */
+
+        for (GUDPEndPoint ep : receiverQueue) {
+            
+        }
     }
 
     public void finish() throws IOException {
