@@ -1,5 +1,7 @@
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.nio.ByteBuffer;
 import java.io.IOException;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -7,21 +9,13 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 public class GUDPSocket implements GUDPSocketAPI {
     DatagramSocket datagramSocket; // a socket for sending and receiving datagram packets
     ConcurrentLinkedQueue<GUDPEndPoint> senderQueue; // the send queues, one element per destination (remoteEndPoint)
-    ConcurrentLinkedQueue<GUDPEndPoint> receiverQueue; // the receive queues, one element per destination (remoteEndPoint)
+    ConcurrentLinkedQueue<GUDPEndPoint> receiverQueue; // the receive queues, one element per destination
+                                                       // (remoteEndPoint)
     GUDPSender s; // Thread sending packets from send queues to destinations
     GUDPReceiver r; // Thread receiving packets and putting them into corresponding receive queues
     private boolean debug = true;
     private boolean startSender = false; // set to true after starting GUDPSender
     private boolean startReceiver = false; // set to true after starting GUDPReceiver
-
-    // GUDP protocol version
-    private final short VERSION = 1;
-
-    // GUDP packet types
-    private final short DATA = 1;
-    private final short BSN = 2;
-    private final short ACK = 3;
-    private final short FIN = 4;
 
     // ACK timeout value in milliseconds
     private final int ACK_TIMEOUT = 500;
@@ -48,9 +42,9 @@ public class GUDPSocket implements GUDPSocketAPI {
          * However, you must comment out these three line and write your own code
          * to let GUDPSender thread send packets instead of send()
          */
-        GUDPPacket gudppacket = GUDPPacket.encapsulate(packet);
-        DatagramPacket udppacket = gudppacket.pack();
-        datagramSocket.send(udppacket);
+        // GUDPPacket gudppacket = GUDPPacket.encapsulate(packet);
+        // DatagramPacket udppacket = gudppacket.pack();
+        // datagramSocket.send(udppacket);
 
         /*
          * if the packet is a new transmission of non-existing end point,
@@ -58,10 +52,42 @@ public class GUDPSocket implements GUDPSocketAPI {
          * also create and add GUDP BSN packet with a random sequence number
          */
 
+        InetAddress addr = packet.getAddress();
+        int port = packet.getPort();
+        GUDPEndPoint endPoint = null;
+
+        for (GUDPEndPoint ep : senderQueue) {
+            if (ep.getRemoteEndPoint().getAddress().equals(addr) && ep.getRemoteEndPoint().getPort() == port) {
+                endPoint = ep;
+                break;
+            }
+        }
+
+        GUDPPacket bsnPacket = null;
+
+        if (endPoint == null) {
+            endPoint = new GUDPEndPoint(addr, port);
+            senderQueue.add(endPoint);
+
+            int bsn = (int) (Math.random() * 65536); // random BSN from 0–65535 Q: What random number generator to use?
+            endPoint.setNextseqnum(bsn + 1); // DATA packets start at BSN + 1
+
+            // Create GUDP BSN paclket
+            bsnPacket = new GUDPPacket(ByteBuffer.allocate(GUDPPacket.HEADER_SIZE));
+            bsnPacket.setType(GUDPPacket.TYPE_BSN);
+            bsnPacket.setSeqno(bsn);
+
+            endPoint.add(bsnPacket);
+        }
+
         /*
          * At this point, senderQueue has an endPoint for this packet.
          * Create and add the packet as GUDP DATA packet to the endPoint
          */
+
+        GUDPPacket dataPacket = GUDPPacket.encapsulate(packet);
+        dataPacket.setSeqno(endPoint.getNextseqnum()); // assign sequence number after BSN
+        endPoint.add(dataPacket);
 
         /*
          * start the GUDPSender thread if it is not running (i.e, startSender is false),
@@ -70,6 +96,16 @@ public class GUDPSocket implements GUDPSocketAPI {
          * since we need it for handling the ACK
          * after that set startSender and startReceiver to true
          */
+
+        if (!startSender) {
+            s.start();
+            startSender = true;
+        }
+        if (!startReceiver) {
+            r.start();
+            startReceiver = true;
+        }
+
     }
 
     public void receive(DatagramPacket packet) throws IOException {
