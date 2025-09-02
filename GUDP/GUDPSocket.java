@@ -14,6 +14,18 @@ public class GUDPSocket implements GUDPSocketAPI {
     private boolean startSender = false; // set to true after starting GUDPSender
     private boolean startReceiver = false; // set to true after starting GUDPReceiver
 
+    // GUDP protocol version
+    private final short VERSION = 1;
+
+    // GUDP packet types
+    private final short DATA = 1;
+    private final short BSN = 2;
+    private final short ACK = 3;
+    private final short FIN = 4;
+
+    // ACK timeout value in milliseconds
+    private final int ACK_TIMEOUT = 500;
+
     public GUDPSocket(DatagramSocket socket) {
         datagramSocket = socket;
         /*
