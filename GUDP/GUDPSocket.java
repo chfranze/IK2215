@@ -144,8 +144,31 @@ public class GUDPSocket implements GUDPSocketAPI {
          * again
          */
 
-        for (GUDPEndPoint ep : receiverQueue) {
-            
+        while (true) {
+            boolean foundPacket = false;
+
+            for (GUDPEndPoint ep : receiverQueue) {
+                if (ep == null)
+                    continue;
+
+                GUDPPacket gpacket = ep.remove(); // try to get one
+                if (gpacket != null) {
+                    gpacket.decapsulate(packet);
+                    foundPacket = true;
+                    break;
+                }
+            }
+
+            if (foundPacket) {
+                break; // exit once a packet is found
+            }
+
+            try {
+                Thread.sleep(SLEEP_TIME); // wait before retry
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
         }
     }
 
@@ -166,6 +189,13 @@ public class GUDPSocket implements GUDPSocketAPI {
          * terminate GUDP gracefully by stopping sender and receiver threads and close
          * the socket
          */
+
+        s.stopGUDPSender();
+        startSender = false;
+
+        r.stopGUDPReceiver();
+        startReceiver = false;
+
     }
 
 }
