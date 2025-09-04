@@ -144,6 +144,10 @@ public class GUDPSocket implements GUDPSocketAPI {
          * again
          */
 
+        // Implement different handeling depending on the packet type. See (GUDP Implementation: Senad and receive)
+
+        
+        
         while (true) {
             boolean foundPacket = false;
 
@@ -181,6 +185,10 @@ public class GUDPSocket implements GUDPSocketAPI {
          * You can put main thread to sleep for 1 seconds and periodically check
          * whether the GUDPSender thread has sent all packets
          */
+
+        // Add FIN to the GUDP send buffer for all remote endpoints to inicate transmission is compleate
+        
+        // Also wait for GUDP to actually send the FIN packet.
     }
 
     public void close() throws IOException {
@@ -196,6 +204,7 @@ public class GUDPSocket implements GUDPSocketAPI {
         r.stopGUDPReceiver();
         startReceiver = false;
 
+        datagramSocket.close();
     }
 
 }
