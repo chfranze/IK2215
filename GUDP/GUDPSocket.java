@@ -74,8 +74,9 @@ public class GUDPSocket implements GUDPSocketAPI {
             endPoint = new GUDPEndPoint(addr, port);
             senderQueue.add(endPoint);
 
-            int bsn = (int) (Math.random() * 10000); // random BSN from 0-10000 Q: What random number to generate not
+            int bsn = 2 + (int) (Math.random() * 10000); // random BSN from 2-10000 Q: What random number to generate not
                                                     // bigger then 65536 right?
+                                                    // And Sequence number is random and not zero or one
             endPoint.setNextseqnum(bsn + 1); // DATA packets start at BSN + 1
 
             // Create GUDP BSN paclket
