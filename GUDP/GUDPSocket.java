@@ -74,7 +74,8 @@ public class GUDPSocket implements GUDPSocketAPI {
             endPoint = new GUDPEndPoint(addr, port);
             senderQueue.add(endPoint);
 
-            int bsn = (int) (Math.random() * 1000); // random BSN from 0-1000 Q: What random number generator to use?
+            int bsn = (int) (Math.random() * 10000); // random BSN from 0-10000 Q: What random number to generate not
+                                                    // bigger then 65536 right?
             endPoint.setNextseqnum(bsn + 1); // DATA packets start at BSN + 1
 
             // Create GUDP BSN paclket
@@ -144,9 +145,6 @@ public class GUDPSocket implements GUDPSocketAPI {
          * to wait for a packet to arrive before iterating through the receiverQueue
          * again
          */
-
-        // Implement different handeling depending on the packet type. See (GUDP
-        // Implementation: Senad and receive)
 
         while (true) {
             boolean foundPacket = false;
