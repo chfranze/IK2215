@@ -20,7 +20,7 @@ public class GUDPSocket implements GUDPSocketAPI {
     // Sleep time for receive() when no packet is in the receiverQueue
     private final int SLEEP_TIME = 50;
 
-    private final int FIN_TIMEOUT = 10000; // Timeout for finish() when waiting for all FINs to be ACKed
+    private final int FIN_TIMEOUT = 20000; // Timeout for finish() when waiting for all FINs to be ACKed
 
     // Sleep time for finish() when waiting for GUDPSender to finish sending all
     private final int FIN_WAIT_SLEEP = 1000;
@@ -68,19 +68,17 @@ public class GUDPSocket implements GUDPSocketAPI {
             }
         }
 
-        GUDPPacket bsnPacket = null;
-
         if (endPoint == null) {
             endPoint = new GUDPEndPoint(addr, port);
             senderQueue.add(endPoint);
 
-            int bsn = 2 + (int) (Math.random() * 10000); // random BSN from 2-10000 Q: What random number to generate not
-                                                    // bigger then 65536 right?
-                                                    // And Sequence number is random and not zero or one
-            endPoint.setNextseqnum(bsn + 1); // DATA packets start at BSN + 1
+            // Generate random BSN (sequence number for first packet)
+            int bsn = 2 + (int) (Math.random() * 10000);
+            endPoint.setBase(bsn + 1); // DATA packets start at BSN+1
+            endPoint.setNextseqnum(bsn + 1);
 
-            // Create GUDP BSN paclket
-            bsnPacket = new GUDPPacket(ByteBuffer.allocate(GUDPPacket.HEADER_SIZE));
+            // Create BSN packet (header only)
+            GUDPPacket bsnPacket = new GUDPPacket(ByteBuffer.allocate(GUDPPacket.HEADER_SIZE));
             bsnPacket.setVersion(GUDPPacket.GUDP_VERSION);
             bsnPacket.setType(GUDPPacket.TYPE_BSN);
             bsnPacket.setSeqno(bsn);
@@ -90,17 +88,14 @@ public class GUDPSocket implements GUDPSocketAPI {
 
         /*
          * At this point, senderQueue has an endPoint for this packet.
-         * Create and add the packet as GUDP DATA packet to the endPoint
+         * Create and add the packet as GUDP DATA packet to the endPoint,
          */
-
         GUDPPacket dataPacket = GUDPPacket.encapsulate(packet);
-        int seq = endPoint.getNextseqnum();
         dataPacket.setVersion(GUDPPacket.GUDP_VERSION);
         dataPacket.setType(GUDPPacket.TYPE_DATA);
-        dataPacket.setSeqno(seq);
-        //dataPacket.setSeqno(endPoint.getExpectedseqnum()); // assign sequence number after BSN
+        dataPacket.setSeqno(endPoint.getNextseqnum());
         endPoint.add(dataPacket);
-        endPoint.setNextseqnum(seq + 1);
+        endPoint.setNextseqnum(endPoint.getNextseqnum() + 1);
 
         /*
          * start the GUDPSender thread if it is not running (i.e, startSender is false),
@@ -109,7 +104,6 @@ public class GUDPSocket implements GUDPSocketAPI {
          * since we need it for handling the ACK
          * after that set startSender and startReceiver to true
          */
-
         if (startSender == false) {
             s.start();
             startSender = true;
@@ -118,7 +112,6 @@ public class GUDPSocket implements GUDPSocketAPI {
             r.start();
             startReceiver = true;
         }
-
     }
 
     public void receive(DatagramPacket packet) throws IOException {
@@ -198,8 +191,6 @@ public class GUDPSocket implements GUDPSocketAPI {
             finPacket.setSeqno(ep.getNextseqnum()); // use next seqno for FIN
             finPacket.setPayloadLength(0);
             ep.add(finPacket);
-            ep.setFinished(true);
-            ep.setNextseqnum(ep.getNextseqnum() + 1);
         }
 
         /*
@@ -217,7 +208,7 @@ public class GUDPSocket implements GUDPSocketAPI {
                 if (ep == null)
                     continue;
 
-                if (!ep.isEmptyQueue() || !ep.getFinished()) {
+                if (!ep.isEmptyQueue()) {
                     allDone = false;
                     break;
                 }
@@ -244,6 +235,7 @@ public class GUDPSocket implements GUDPSocketAPI {
          * transmission is completed
          */
         for (GUDPEndPoint ep : senderQueue) {
+            ep.setFinished(true);
             ep.clear();
         }
         senderQueue.clear();
