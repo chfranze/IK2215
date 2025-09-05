@@ -81,8 +81,10 @@ public class GUDPSocket implements GUDPSocketAPI {
 
             // Create GUDP BSN paclket
             bsnPacket = new GUDPPacket(ByteBuffer.allocate(GUDPPacket.HEADER_SIZE));
+            bsnPacket.setVersion(GUDPPacket.GUDP_VERSION);
             bsnPacket.setType(GUDPPacket.TYPE_BSN);
             bsnPacket.setSeqno(bsn);
+            bsnPacket.setPayloadLength(0);
             endPoint.add(bsnPacket);
         }
 
@@ -92,8 +94,13 @@ public class GUDPSocket implements GUDPSocketAPI {
          */
 
         GUDPPacket dataPacket = GUDPPacket.encapsulate(packet);
-        dataPacket.setSeqno(endPoint.getExpectedseqnum()); // assign sequence number after BSN
+        int seq = endPoint.getNextseqnum();
+        dataPacket.setVersion(GUDPPacket.GUDP_VERSION);
+        dataPacket.setType(GUDPPacket.TYPE_DATA);
+        dataPacket.setSeqno(seq);
+        //dataPacket.setSeqno(endPoint.getExpectedseqnum()); // assign sequence number after BSN
         endPoint.add(dataPacket);
+        endPoint.setNextseqnum(seq + 1);
 
         /*
          * start the GUDPSender thread if it is not running (i.e, startSender is false),
@@ -186,10 +193,13 @@ public class GUDPSocket implements GUDPSocketAPI {
                 continue;
 
             GUDPPacket finPacket = new GUDPPacket(ByteBuffer.allocate(GUDPPacket.HEADER_SIZE));
+            finPacket.setVersion(GUDPPacket.GUDP_VERSION);
             finPacket.setType(GUDPPacket.TYPE_FIN);
             finPacket.setSeqno(ep.getNextseqnum()); // use next seqno for FIN
+            finPacket.setPayloadLength(0);
             ep.add(finPacket);
             ep.setFinished(true);
+            ep.setNextseqnum(ep.getNextseqnum() + 1);
         }
 
         /*
