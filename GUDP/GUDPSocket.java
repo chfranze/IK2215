@@ -83,12 +83,11 @@ public class GUDPSocket implements GUDPSocketAPI {
             bsnPacket.setPayloadLength(0);
             bsnPacket.setSocketAddress(new InetSocketAddress(addr, port));
 
-            // Give the BSN a random sequence number, not 0 or 1
-            int bsn = 2 + (int) (Math.random() * 1000);
+            // Give the BSN a random sequence number, not 0
+            int bsn = 1 + (int) (Math.random() * 1000);
             bsnPacket.setSeqno(bsn);
 
             // Add the BSN packet to the endpoint's queue
-            endPoint.setBase(port);
             endPoint.add(bsnPacket);
         }
 
