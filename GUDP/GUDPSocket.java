@@ -103,8 +103,8 @@ public class GUDPSocket implements GUDPSocketAPI {
          */
 
         // Compute next sequence number from endpoint
-        int nextSeq = endPoint.getNextseqnum() + 1;
-        endPoint.setNextseqnum(nextSeq);
+        int nextSeq = endPoint.getNextseqnum();
+        endPoint.setNextseqnum(nextSeq + 1);
 
         // Here create DATA packet that uses the encapsulate() function
         GUDPPacket dataPacket = GUDPPacket.encapsulate(packet);
