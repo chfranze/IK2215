@@ -82,7 +82,8 @@ public class GUDPSocket implements GUDPSocketAPI {
             bsnPacket.setType(GUDPPacket.TYPE_BSN);
             bsnPacket.setVersion(GUDPPacket.GUDP_VERSION);
             bsnPacket.setPayloadLength(0);
-            bsnPacket.setSocketAddress(new InetSocketAddress(addr, port));
+            //bsnPacket.setSocketAddress(new InetSocketAddress(addr, port));
+            bsnPacket.setSocketAddress((InetSocketAddress) packet.getSocketAddress());
 
             // Sequence number should be random and not zero or one
             Random rand = new Random();
@@ -192,8 +193,8 @@ public class GUDPSocket implements GUDPSocketAPI {
 
         for (GUDPEndPoint ep : senderQueue) {
             // Get the address and port of the remote end point
-            InetAddress addr = ep.getRemoteEndPoint().getAddress();
-            int port = ep.getRemoteEndPoint().getPort();
+            //InetAddress addr = ep.getRemoteEndPoint().getAddress();
+            //int port = ep.getRemoteEndPoint().getPort();
 
             // Create FIN packet the same way as in GUDPPacket.encapsulate()
             ByteBuffer buffer = ByteBuffer.allocate(GUDPPacket.HEADER_SIZE);
@@ -202,7 +203,13 @@ public class GUDPSocket implements GUDPSocketAPI {
             finPacket.setType(GUDPPacket.TYPE_FIN);
             finPacket.setVersion(GUDPPacket.GUDP_VERSION);
             finPacket.setPayloadLength(0);
-            finPacket.setSocketAddress(new InetSocketAddress(addr, port));
+            //finPacket.setSocketAddress(new InetSocketAddress(addr, port));
+            finPacket.setSocketAddress(ep.getRemoteEndPoint());
+
+            // Sequence number should be the nextseqnum of the endpoint
+            int finNum = ep.getNextseqnum();
+            finPacket.setSeqno(finNum);
+            ep.setLast(ep.getLast()+1);
 
             // Add the FIN packet to the endpoint's queue
             ep.add(finPacket);
