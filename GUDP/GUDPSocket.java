@@ -210,7 +210,7 @@ public class GUDPSocket implements GUDPSocketAPI {
             // Sequence number should be the nextseqnum of the endpoint
             int finNum = ep.getNextseqnum();
             finPacket.setSeqno(finNum);
-            ep.setLast(ep.getLast() + 1);
+            ep.setNextseqnum(finNum + 1); // advance the next sequence number
 
             // Add the FIN packet to the endpoint's queue
             ep.add(finPacket);
