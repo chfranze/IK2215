@@ -91,7 +91,7 @@ public class GUDPSocket implements GUDPSocketAPI {
 
             // Initialize the endpoint's base and nextseqnum as instructed in FSMSender
             endPoint.setBase(bsn);
-            endPoint.setNextseqnum(bsn);
+            endPoint.setNextseqnum(bsn + 1);
 
             // Add the BSN packet to the endpoint's queue
             endPoint.add(bsnPacket);
