@@ -89,11 +89,6 @@ public class GUDPSocket implements GUDPSocketAPI {
             int bsn = 2 + rand.nextInt(Short.MAX_VALUE - 2);
             bsnPacket.setSeqno(bsn);
 
-            // Initialize endpoint sequence numbers
-            endPoint.setBase(bsn);
-            endPoint.setExpectedseqnum(bsn);
-            endPoint.setLast(bsn);
-
             // Add the BSN packet to the endpoint's queue
             endPoint.add(bsnPacket);
         }
@@ -105,9 +100,6 @@ public class GUDPSocket implements GUDPSocketAPI {
 
         // Here create DATA packet that uses the encapsulate() function
         GUDPPacket dataPacket = GUDPPacket.encapsulate(packet);
-        int dataSeq = endPoint.getLast() + 1; // next sequence number after BSN
-        dataPacket.setSeqno(dataSeq);
-        endPoint.setLast(dataSeq);
         endPoint.add(dataPacket);
 
         /*
