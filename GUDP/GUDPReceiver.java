@@ -2,48 +2,27 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.io.IOException;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.net.InetSocketAddress;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Iterator;
-import java.util.List;
 
-/*
- * GUDPReceiver is a non-static nested class (inner class)
- * GUDPReceiver receives incoming packets from remote hosts and put them in the receiverQueue.
- */
-@SuppressWarnings("unused")
+// Corrected GUDPReceiver
 public class GUDPReceiver extends Thread {
     private final DatagramSocket sock;
     private final ConcurrentLinkedQueue<GUDPEndPoint> receiverQueue;
     private final GUDPSender s;
     private final ConcurrentLinkedQueue<GUDPEndPoint> senderQueue;
     private boolean runFlag = true;
-    private boolean debug = true; // set to print message for testing purpose
+    private boolean debug = true;
 
-    private enum drop { // use for test dropping different type of packets
-        NOTHING,
-        FIRST_BSN,
-        FIRST_DATA,
-        FIRST_ACK,
-        FIRST_FIN,
-        RANDOM,
-        ALL,
-    }
-
-    private drop senderDrop;
-    private drop receiverDrop;
-
-    public GUDPReceiver(DatagramSocket sock, ConcurrentLinkedQueue<GUDPEndPoint> receiverQueue, GUDPSender s,
-            ConcurrentLinkedQueue<GUDPEndPoint> senderQueue) {
+    public GUDPReceiver(DatagramSocket sock, ConcurrentLinkedQueue<GUDPEndPoint> receiverQueue,
+            GUDPSender s, ConcurrentLinkedQueue<GUDPEndPoint> senderQueue) {
         this.sock = sock;
         this.receiverQueue = receiverQueue;
         this.s = s;
         this.senderQueue = senderQueue;
-        this.senderDrop = drop.NOTHING;
-        this.receiverDrop = drop.NOTHING;
     }
 
     public void stopGUDPReceiver() {
@@ -52,158 +31,137 @@ public class GUDPReceiver extends Thread {
 
     @Override
     public void run() {
-        while (this.runFlag) {
-            /*
-             * This is a loop that continously runs until the GUDPReceiver thread is
-             * terminated.
-             *
-             * Receive incoming packets and process each packet according to the type of
-             * packets
-             * ACK: Receive ACK as a part of GBN sender logic. Remove all ACKed packets from
-             * senderQueue.
-             * Progress to the RCV state for this end point and call FSMSender.
-             * BSN: Create a new end point if it does not exist. Then, add BSN to its
-             * receive queue and send ACK.
-             * If the existing end point was already finished. Reset the end point and add
-             * the BSN and send ACK.
-             * Otherwise, just send ACK with the expected sequence number.
-             * DATA: If DATA packet with expected sequence number, add it to receive queue
-             * and send ACK.
-             * Otherwise, just send ACK with the expected sequence number.
-             * (If DATA packet for non-existing remoteEndPoint arrives, do nothing)
-             * FIN: Same as DATA. But also set "finished" to true to indicate file reception
-             * is completed.
-             *
-             * The teacher's code also put the GUDPReceiver thread to sleep for 50 ms at the
-             * end of the loop.
-             * This is to reduce the chance of inconsistency due to GUDPSender and
-             * GUDPReceiver accessing
-             * the senderQueue using iterator
-             *
-             * IMPORTANT:
-             * The receiver may drop a new BSN that is sent to the already finished end
-             * point.
-             * To simplify the process, before dropping the new BSN, the teacher code's will
-             * reset the end point
-             * if the new BSN is outside the prevous expectedseqnum's range (i.e., expected
-             * seqnum +/- window size).
-             * It also set the new expectedseqnum to the new BSN before dropping the new
-             * BSN.
-             */
+        while (runFlag) {
             byte[] buf = new byte[GUDPPacket.MAX_DATAGRAM_LEN];
-            DatagramPacket udppacket = new DatagramPacket(buf, buf.length);
+            DatagramPacket udpPacket = new DatagramPacket(buf, buf.length);
             try {
-                this.sock.receive(udppacket);
-            } catch (IOException e) {
-                System.err.println("GUDPReceiver IOException: probably because of socket closed");
-                break;
-            }
+                sock.receive(udpPacket);
+                GUDPPacket packet = GUDPPacket.unpack(udpPacket);
+                InetSocketAddress remoteSock = packet.getSocketAddress();
+                InetAddress remoteAddr = remoteSock.getAddress();
+                int remotePort = remoteSock.getPort();
 
-            try {
-                GUDPPacket gudppacket = GUDPPacket.unpack(udppacket);
-                InetSocketAddress sock = gudppacket.getSocketAddress();
-                GUDPEndPoint endPoint;
+                GUDPEndPoint ep = findEndpoint(remoteAddr, remotePort);
 
-                switch (gudppacket.getType()) {
+                switch (packet.getType()) {
                     case GUDPPacket.TYPE_ACK:
-                        InetSocketAddress ackSock = gudppacket.getSocketAddress();
-                        int ackSeq = gudppacket.getSeqno();
-
-                        // Find the corresponding endpoint
-                        for (GUDPEndPoint ep : senderQueue) {
-                            if (ep.getRemoteEndPoint().equals(ackSock)) {
-                                // Remove all packets with seqno <= ackSeq
-                                ep.removeAllACK(ackSeq - 1);
-
-                                // Update base and move to RCV state
-                                ep.setBase(ackSeq);
-                                ep.setState(GUDPEndPoint.endPointState.RCV);
-
-                                // And call FSMSender
-                                s.FSMSender(ep);
+                        int ackSeq = packet.getSeqno();
+                        for (GUDPEndPoint senderEp : senderQueue) {
+                            InetSocketAddress re = senderEp.getRemoteEndPoint();
+                            if (re.getAddress().equals(remoteAddr) && re.getPort() == remotePort) {
+                                senderEp.removeAllACK(ackSeq - 1);
+                                senderEp.setBase(ackSeq);
+                                senderEp.setState(GUDPEndPoint.endPointState.RCV);
+                                s.FSMSender(senderEp);
                                 break;
                             }
                         }
                         break;
-                    case GUDPPacket.TYPE_BSN:
-                        // if new end point, add a new GUDPEndPoint, update all parameters, add it to
-                        // receiverQueue, and send ACK
-                        // else if end point was finished
-                        // reset end point parameters and use the new expectedseqnum based on BSN
-                        // (seq+1), and send ACK
-                        // else send ACK with the expectedseqnum
-                    case GUDPPacket.TYPE_DATA:
-                        // if seq==expectedseqnum, add GUDP packet to end point receive buffer, update
-                        // all parameters, and send ACK
-                        // else send ACK with the expectedseqnum
-                    case GUDPPacket.TYPE_FIN:
-                        // if seq==expectedseqnum, update all parameters, set end point as finished, and
-                        // send ACK
-                        // else send ACK with the expectedseqnum
-                } /* switch */
 
+                    case GUDPPacket.TYPE_BSN:
+                        int bsnSeq = packet.getSeqno();
+                        if (ep == null) {
+                            ep = new GUDPEndPoint(remoteAddr, remotePort);
+                            ep.setExpectedseqnum(bsnSeq + 1);
+                            receiverQueue.add(ep);
+                            ep.add(packet);
+                            sendACK(ep.getRemoteEndPoint(), ep.getExpectedseqnum());
+                        } else if (ep.getFinished()) {
+                            ep.clear();
+                            ep.setExpectedseqnum(bsnSeq + 1);
+                            ep.add(packet);
+                            sendACK(ep.getRemoteEndPoint(), ep.getExpectedseqnum());
+                        } else {
+                            sendACK(ep.getRemoteEndPoint(), ep.getExpectedseqnum());
+                        }
+                        break;
+
+                    case GUDPPacket.TYPE_DATA:
+                        if (ep == null) {
+                            ep = new GUDPEndPoint(remoteAddr, remotePort);
+                            receiverQueue.add(ep);
+                        }
+
+                        int expected = ep.getExpectedseqnum();
+
+                        // Only accept packet if it's exactly the expected sequence number
+                        if (packet.getSeqno() == expected) {
+                            ep.add(packet); // store the packet
+                            ep.setExpectedseqnum(expected + 1); // advance expected
+                        } else if (packet.getSeqno() > expected) {
+                            // Out-of-order: discard, still ACK current expected
+                        }
+
+                        sendACK(ep.getRemoteEndPoint(), ep.getExpectedseqnum());
+                        break;
+
+                    case GUDPPacket.TYPE_FIN:
+                        if (ep == null) {
+                            ep = new GUDPEndPoint(remoteAddr, remotePort);
+                            receiverQueue.add(ep);
+                        }
+
+                        expected = ep.getExpectedseqnum();
+                        if (packet.getSeqno() == expected) {
+                            ep.setExpectedseqnum(expected + 1);
+                            ep.setFinished(true);
+                        }
+
+                        sendACK(ep.getRemoteEndPoint(), ep.getExpectedseqnum());
+                        break;
+
+                    default:
+                        if (debug)
+                            System.out.println("Unknown packet type from " + remoteSock);
+                        break;
+                }
             } catch (IOException e) {
-                System.err.println("IOException in GUDPReceiver: GUDPPacket.unpack");
-                e.printStackTrace();
+                if (debug)
+                    System.err.println("GUDPReceiver IOException: " + e.getMessage());
             }
 
-            /*
-             * The teacher's code also put the GUDPReceiver thread to sleep for 50 ms at the
-             * end of the loop.
-             * This is to reduce the chance of inconsistency due to GUDPSender and
-             * GUDPReceiver accessing
-             * the senderQueue using iterator
-             */
-
-            // put thread to sleep for 50 ms /* to add delay between the processing of each
-            // receiving packet */
             try {
                 Thread.sleep(50);
             } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-
-        } /* while (this.runFlag) */
-
-        /*
-         * After the GUDPReceiver thread become inactive (after stopGUDPReceiver() was
-         * called)
-         * In this case, after the GUDPReceiver thread become inactive (after
-         * stopGUDPReceiver() was called)
-         * iterate through the receiverQueue to remove all end points
-         * This is to ensure that finish() will end and the application can terminate
-         * gracefully
-         */
-
-        // if receiverQueue is not empty, iterate through receiverQueue to remove all
-        // endpoints
-
-        // Clear all endpoints from receiverQueue
-        synchronized (receiverQueue) {
-            if (!receiverQueue.isEmpty()) {
-                Iterator<GUDPEndPoint> it = receiverQueue.iterator();
-                while (it.hasNext()) {
-                    it.next();
-                    it.remove();
-                }
+                Thread.currentThread().interrupt();
+                break;
             }
         }
 
-        // if senderQueue is not empty, iterate through senderQueue to remove all
-        // endpoints
-
-        // Clear all endpoints from senderQueue
+        // Cleanup
+        synchronized (receiverQueue) {
+            receiverQueue.clear();
+        }
         synchronized (senderQueue) {
-            if (!senderQueue.isEmpty()) {
-                Iterator<GUDPEndPoint> it = senderQueue.iterator();
-                while (it.hasNext()) {
-                    it.next();
-                    it.remove();
-                }
-            }
+            senderQueue.clear();
         }
 
         System.out.println("GUDPReceiver ended");
-    } /* public void run() */
+    }
 
-} /* public class GUDPReceiver */
+    private GUDPEndPoint findEndpoint(InetAddress addr, int port) {
+        for (GUDPEndPoint ep : receiverQueue) {
+            InetSocketAddress re = ep.getRemoteEndPoint();
+            if (re.getAddress().equals(addr) && re.getPort() == port)
+                return ep;
+        }
+        return null;
+    }
+
+    private void sendACK(InetSocketAddress dest, int ackSeq) throws IOException {
+        ByteBuffer buf = ByteBuffer.allocate(GUDPPacket.HEADER_SIZE);
+        buf.order(ByteOrder.BIG_ENDIAN);
+        GUDPPacket ack = new GUDPPacket(buf);
+        ack.setType(GUDPPacket.TYPE_ACK);
+        ack.setVersion(GUDPPacket.GUDP_VERSION);
+        ack.setPayloadLength(0);
+        ack.setSocketAddress(dest);
+        ack.setSeqno(ackSeq);
+        DatagramPacket dp = ack.pack();
+        dp.setAddress(dest.getAddress());
+        dp.setPort(dest.getPort());
+        sock.send(dp);
+        if (debug)
+            System.out.println("SEND ACK " + ackSeq + " to " + dest);
+    }
+}
