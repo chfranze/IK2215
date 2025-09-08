@@ -22,97 +22,110 @@ public class GUDPSender extends Thread {
 
     @Override
     public void run() {
-        while (this.runFlag) {
+        while (runFlag) {
+            boolean anyWorkDone = false;
+
             Iterator<GUDPEndPoint> iterator = senderQueue.iterator();
             while (iterator.hasNext()) {
                 GUDPEndPoint ep = iterator.next();
+
+                int oldBase = ep.getBase();
+                int oldNext = ep.getNextseqnum();
+
+                if (debug) {
+                    System.out.println("FSMSender: Endpoint " + ep.getRemoteEndPoint() +
+                            " Base=" + oldBase + " Next=" + oldNext +
+                            " Window=" + ep.getWindowSize() + " QueueSize=" + ep.queueSize() +
+                            " Retry=" + ep.getRetry());
+                }
+
                 FSMSender(ep);
+
+                if (ep.getBase() != oldBase) {
+                    anyWorkDone = true; // Base moved, progress made
+                    if (debug)
+                        System.out.println("ACK progress: Base moved from " + oldBase + " to " + ep.getBase());
+                }
+
                 if (ep.getFinished() && ep.isEmptyQueue()) {
                     iterator.remove();
-                    if (debug) {
+                    if (debug)
                         System.out.println("GUDPSender: removed endpoint to " + ep.getRemoteEndPoint());
-                    }
                 }
             }
 
             try {
-                Thread.sleep(10); // small sleep to avoid busy loop
-            } catch (InterruptedException ignored) {
+                // If no progress, sleep longer to avoid repeated sends
+                Thread.sleep(anyWorkDone ? 10 : 50);
+            } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
         }
 
-        // cleanup
-        Iterator<GUDPEndPoint> iterator = senderQueue.iterator();
-        while (iterator.hasNext()) {
-            GUDPEndPoint ep = iterator.next();
-            iterator.remove();
-            if (debug) {
-                System.out.println("GUDPSender: removed endpoint to " + ep.getRemoteEndPoint());
-            }
-        }
-
+        senderQueue.clear();
         System.out.println("GUDPSender ended");
     }
 
     public void FSMSender(GUDPEndPoint ep) {
         try {
             switch (ep.getState()) {
-                case INIT:
-                    ep.setState(GUDPEndPoint.endPointState.WAIT);
-                    break;
+                case INIT -> ep.setState(GUDPEndPoint.endPointState.WAIT);
 
-                case WAIT:
-                    if (!ep.isEmptyQueue()) {
+                case WAIT -> {
+                    if (!ep.isEmptyQueue())
                         ep.setState(GUDPEndPoint.endPointState.SEND);
-                    }
-                    break;
+                }
 
-                case SEND:
-                    // Send all packets in window
+                case SEND -> {
                     int base = ep.getBase();
                     int next = ep.getNextseqnum();
+
                     for (int seq = base; seq < next && seq < base + ep.getWindowSize(); seq++) {
                         GUDPPacket pkt = ep.getPacket(seq);
-                        if (pkt == null)
+                        if (pkt == null) {
+                            if (debug)
+                                System.out.println("SEND: No packet for seq=" + seq);
                             continue;
+                        }
 
                         DatagramPacket udpPkt = pkt.pack();
                         InetSocketAddress dest = pkt.getSocketAddress();
-                        udpPkt.setAddress(dest.getAddress()); // <--- crucial fix
-                        udpPkt.setPort(dest.getPort()); // <--- crucial fix
-
+                        udpPkt.setAddress(dest.getAddress());
+                        udpPkt.setPort(dest.getPort());
                         sock.send(udpPkt);
 
                         if (debug)
-                            System.out.println("SEND seq=" + pkt.getSeqno() + " to " + dest);
+                            System.out.println("SEND seq=" + pkt.getSeqno() + " to " + dest +
+                                    " Base=" + ep.getBase() + " Next=" + ep.getNextseqnum());
 
                         if (seq == base)
                             ep.startTimer(); // first in window
                     }
                     ep.setState(GUDPEndPoint.endPointState.WAIT);
-                    break;
+                }
 
-                case RCV:
-                    // Timer management
-                    if (ep.getBase() == ep.getNextseqnum()) {
-                        try {
-                            ep.stopTimer(); // may throw NPE
-                        } catch (NullPointerException ignored) {
-                        }
-                        ep.setRetry(0);
-                    } else {
-                        try {
+                case RCV -> {
+                    if (debug)
+                        System.out.println("RCV State: Base=" + ep.getBase() + " Next=" + ep.getNextseqnum());
+
+                    try {
+                        if (ep.getBase() == ep.getNextseqnum()) {
+                            ep.stopTimer();
+                            ep.setRetry(0);
+                        } else {
                             ep.stopTimer();
                             ep.startTimer();
-                        } catch (NullPointerException ignored) {
-                            // first-time timer will be started later by startTimer()
                         }
+                    } catch (NullPointerException ignored) {
                     }
                     ep.setState(GUDPEndPoint.endPointState.WAIT);
-                    break;
+                }
 
-                case TIMEOUT:
+                case TIMEOUT -> {
+                    if (debug)
+                        System.out.println("TIMEOUT: Base=" + ep.getBase() + " Next=" + ep.getNextseqnum() +
+                                " Retry=" + ep.getRetry());
+
                     if (ep.getRetry() >= ep.getMaxRetry()) {
                         System.out.println("GUDPSender: max retries reached for " + ep.getRemoteEndPoint());
                         stopGUDPSender();
@@ -136,7 +149,7 @@ public class GUDPSender extends Thread {
                     ep.setRetry(ep.getRetry() + 1);
                     ep.startTimer();
                     ep.setState(GUDPEndPoint.endPointState.WAIT);
-                    break;
+                }
             }
         } catch (IOException e) {
             System.err.println("GUDPSender: IOException in FSMSender: " + e.getMessage());
