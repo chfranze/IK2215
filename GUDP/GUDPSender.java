@@ -135,11 +135,12 @@ public class GUDPSender extends Thread {
                  * if endpoint send window is full OR nextseqnum > last
                  * put the thread to sleep for 100 ms
                  */
-                if (!endPoint.isEmptyQueue()) {
+                if (!endPoint.isEmptyQueue() || (endPoint.isEmptyQueue() && endPoint.getFinished())) {
                     endPoint.setState(GUDPEndPoint.endPointState.SEND);
-                } else {
+                } else if (endPoint.getNextseqnum() >= endPoint.getBase() + endPoint.getWindowSize()
+                        || endPoint.getNextseqnum() > endPoint.getLast()) {
                     try {
-                        Thread.sleep(100); // Sleep for 100 milliseconds
+                        Thread.sleep(100);
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                     }
