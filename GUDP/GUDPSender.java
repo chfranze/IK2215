@@ -60,12 +60,12 @@ public class GUDPSender extends Thread {
                 int oldBase = ep.getBase();
                 int oldNext = ep.getNextseqnum();
 
-                if (debug) {
-                    System.out.println("FSMSender: Endpoint " + ep.getRemoteEndPoint() +
-                            " Base=" + oldBase + " Next=" + oldNext +
-                            " Window=" + ep.getWindowSize() + " QueueSize=" + ep.queueSize() +
-                            " Retry=" + ep.getRetry());
-                }
+                // if (debug) {
+                //     System.out.println("FSMSender: Endpoint " + ep.getRemoteEndPoint() +
+                //             " Base=" + oldBase + " Next=" + oldNext +
+                //             " Window=" + ep.getWindowSize() + " QueueSize=" + ep.queueSize() +
+                //             " Retry=" + ep.getRetry());
+                // }
 
                 FSMSender(ep);
 
