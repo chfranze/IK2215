@@ -25,6 +25,9 @@ public class GUDPSocket implements GUDPSocketAPI {
 
     private final int FIN_TIMEOUT = 20000; // Timeout for finish() when waiting for all FINs to be ACKed
 
+    // Sleep time for finish() when waiting for GUDPSender to finish sending all
+    private final int FIN_WAIT_SLEEP = 1000;
+
     public GUDPSocket(DatagramSocket socket) {
         datagramSocket = socket;
         /*
@@ -56,11 +59,11 @@ public class GUDPSocket implements GUDPSocketAPI {
          * create and add a new endPoint to the senderQueue,
          * also create and add GUDP BSN packet with a random sequence number
          */
+
         InetAddress addr = packet.getAddress();
         int port = packet.getPort();
         GUDPEndPoint endPoint = null;
 
-        // find or create sender endpoint
         for (GUDPEndPoint ep : senderQueue) {
             if (ep.getRemoteEndPoint().getAddress().equals(addr) && ep.getRemoteEndPoint().getPort() == port) {
                 endPoint = ep;
@@ -79,7 +82,7 @@ public class GUDPSocket implements GUDPSocketAPI {
             bsnPacket.setType(GUDPPacket.TYPE_BSN);
             bsnPacket.setVersion(GUDPPacket.GUDP_VERSION);
             bsnPacket.setPayloadLength(0);
-            bsnPacket.setSocketAddress(new InetSocketAddress(addr, port));
+            bsnPacket.setSocketAddress((InetSocketAddress) packet.getSocketAddress());
 
             // Sequence number should be random and not zero or one
             Random rand = new Random();
@@ -89,6 +92,8 @@ public class GUDPSocket implements GUDPSocketAPI {
             // Initialize the endpoint's base and nextseqnum as instructed in FSMSender
             endPoint.setBase(bsn);
             endPoint.setNextseqnum(bsn + 1);
+            // inizalize last
+            endPoint.setLast(bsn);
 
             // Add the BSN packet to the endpoint's queue
             endPoint.add(bsnPacket);
@@ -100,14 +105,14 @@ public class GUDPSocket implements GUDPSocketAPI {
          */
 
         // Compute next sequence number from endpoint
-        int nextSeq = endPoint.getNextseqnum();
-        endPoint.setNextseqnum(nextSeq + 1);
+        //int nextSeq = endPoint.getNextseqnum();
+        //endPoint.setNextseqnum(nextSeq + 1);
 
         // Here create DATA packet that uses the encapsulate() function
         GUDPPacket dataPacket = GUDPPacket.encapsulate(packet);
-        dataPacket.setType(GUDPPacket.TYPE_DATA);
-        dataPacket.setSeqno(nextSeq);
-        dataPacket.setSocketAddress(new InetSocketAddress(addr, port));
+
+        // Set the right sequence number for the data packet witch will be 
+        dataPacket.setSeqno(endPoint.getNextseqnum());
 
         // Add the DATA packet to the endpoint's queue
         endPoint.add(dataPacket);
@@ -119,11 +124,11 @@ public class GUDPSocket implements GUDPSocketAPI {
          * since we need it for handling the ACK
          * after that set startSender and startReceiver to true
          */
-        if (!startSender) {
+        if (startSender == false) {
             s.start();
             startSender = true;
         }
-        if (!startReceiver) {
+        if (startReceiver == false) {
             r.start();
             startReceiver = true;
         }
@@ -149,7 +154,7 @@ public class GUDPSocket implements GUDPSocketAPI {
          * after that set startReceiver to true
          */
 
-        if (!startReceiver) {
+        if (startReceiver == false) {
             r.start();
             startReceiver = true;
         }
@@ -164,21 +169,25 @@ public class GUDPSocket implements GUDPSocketAPI {
 
         while (true) {
             boolean foundPacket = false;
+
             for (GUDPEndPoint ep : receiverQueue) {
                 if (ep == null)
                     continue;
-                GUDPPacket gpacket = ep.remove();
-                if (gpacket != null && gpacket.getType() == GUDPPacket.TYPE_DATA) {
+
+                GUDPPacket gpacket = ep.remove(); // try to get one
+                if (gpacket != null) {
                     gpacket.decapsulate(packet);
                     foundPacket = true;
                     break;
                 }
             }
-            if (foundPacket)
-                break;
+
+            if (foundPacket) {
+                break; // exit once a packet is found
+            }
 
             try {
-                Thread.sleep(SLEEP_TIME);
+                Thread.sleep(SLEEP_TIME); // wait before retry
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
@@ -193,6 +202,7 @@ public class GUDPSocket implements GUDPSocketAPI {
          */
 
         for (GUDPEndPoint ep : senderQueue) {
+            // Create FIN packet the same way as in GUDPPacket.encapsulate()
             ByteBuffer buffer = ByteBuffer.allocate(GUDPPacket.HEADER_SIZE);
             buffer.order(ByteOrder.BIG_ENDIAN);
             GUDPPacket finPacket = new GUDPPacket(buffer);
@@ -204,26 +214,31 @@ public class GUDPSocket implements GUDPSocketAPI {
             // Sequence number should be the nextseqnum of the endpoint
             int finNum = ep.getNextseqnum();
             finPacket.setSeqno(finNum);
-            ep.setNextseqnum(finNum + 1);
+            ep.setNextseqnum(finNum + 1); // advance the next sequence number
 
             // Add the FIN packet to the endpoint's queue
             ep.add(finPacket);
-            if (ep.getBase() == finNum) {
-                ep.startTimer();
-            }
         }
+
+        /*
+         * Then, wait for the GUDPSender thread to finish sending all packets
+         * You can put main thread to sleep for 1 seconds and periodically check
+         * whether the GUDPSender thread has sent all packets
+         */
 
         long start = System.currentTimeMillis();
         boolean allDone;
+
         do {
             try {
-                Thread.sleep(1000);
+                Thread.sleep(1000); // initial 1-second sleep
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new IOException("Finish interrupted", e);
             }
 
             allDone = true;
+
             for (GUDPEndPoint ep : senderQueue) {
                 if (!ep.isEmptyQueue()) {
                     allDone = false;
@@ -234,9 +249,10 @@ public class GUDPSocket implements GUDPSocketAPI {
             if (System.currentTimeMillis() - start > FIN_TIMEOUT) {
                 throw new IOException("FIN waiting for ACK timeout");
             }
+
         } while (!allDone);
 
-         // Cleanup
+        // Cleanup
         for (GUDPEndPoint ep : senderQueue) {
             ep.setFinished(true);
             ep.clear();
@@ -250,7 +266,7 @@ public class GUDPSocket implements GUDPSocketAPI {
          * terminate GUDP gracefully by stopping sender and receiver threads and close
          * the socket
          */
-        
+
         s.stopGUDPSender();
         startSender = false;
 
