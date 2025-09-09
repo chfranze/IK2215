@@ -211,10 +211,8 @@ public class GUDPSocket implements GUDPSocketAPI {
             finPacket.setPayloadLength(0);
             finPacket.setSocketAddress(ep.getRemoteEndPoint());
 
-            // Sequence number should be the nextseqnum of the endpoint
-            int finNum = ep.getNextseqnum();
-            finPacket.setSeqno(finNum);
-            ep.setNextseqnum(finNum + 1); // advance the next sequence number
+            // Set the right sequence number for the fin packet
+            finPacket.setSeqno(ep.getNextseqnum());
 
             // Add the FIN packet to the endpoint's queue
             ep.add(finPacket);
