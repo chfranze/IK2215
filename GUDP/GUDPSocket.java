@@ -54,49 +54,44 @@ public class GUDPSocket implements GUDPSocketAPI {
         // DatagramPacket udppacket = gudppacket.pack();
         // datagramSocket.send(udppacket);
 
+        InetSocketAddress remoteEndPoint = (InetSocketAddress) packet.getSocketAddress();
+        GUDPEndPoint endPoint = findSenderEndPoint(remoteEndPoint);
+
         /*
          * if the packet is a new transmission of non-existing end point,
          * create and add a new endPoint to the senderQueue,
          * also create and add GUDP BSN packet with a random sequence number
          */
 
-        InetAddress addr = packet.getAddress();
-        int port = packet.getPort();
-        GUDPEndPoint endPoint = null;
-
-        for (GUDPEndPoint ep : senderQueue) {
-            if (ep.getRemoteEndPoint().getAddress().equals(addr) && ep.getRemoteEndPoint().getPort() == port) {
-                endPoint = ep;
-                break;
-            }
-        }
-
         if (endPoint == null) {
-            endPoint = new GUDPEndPoint(addr, port);
-            senderQueue.add(endPoint);
+            // New endpoint
+            endPoint = new GUDPEndPoint(remoteEndPoint.getAddress(), remoteEndPoint.getPort());
 
-            // Create BSN packet the same way as in GUDPPacket.encapsulate()
-            ByteBuffer buffer = ByteBuffer.allocate(GUDPPacket.HEADER_SIZE);
-            buffer.order(ByteOrder.BIG_ENDIAN);
-            GUDPPacket bsnPacket = new GUDPPacket(buffer);
-            bsnPacket.setType(GUDPPacket.TYPE_BSN);
-            bsnPacket.setVersion(GUDPPacket.GUDP_VERSION);
-            bsnPacket.setPayloadLength(0);
-            bsnPacket.setSocketAddress((InetSocketAddress) packet.getSocketAddress());
+            // senderQueue.add(endPoint);
 
-            // Sequence number should be random and not zero or one
+            // // Create BSN packet the same way as in GUDPPacket.encapsulate()
+            // ByteBuffer buffer = ByteBuffer.allocate(GUDPPacket.HEADER_SIZE);
+            // buffer.order(ByteOrder.BIG_ENDIAN);
+            // GUDPPacket bsnPacket = new GUDPPacket(buffer);
+            // bsnPacket.setType(GUDPPacket.TYPE_BSN);
+            // bsnPacket.setVersion(GUDPPacket.GUDP_VERSION);
+            // bsnPacket.setPayloadLength(0);
+            // bsnPacket.setSocketAddress((InetSocketAddress) packet.getSocketAddress());
+
+            // // Sequence number should be random and not zero or one
             Random rand = new Random();
             int bsn = 2 + rand.nextInt(Short.MAX_VALUE - 2);
-            bsnPacket.setSeqno(bsn);
-
-            // Initialize the endpoint's base and nextseqnum as instructed in FSMSender
+            // bsnPacket.setSeqno(bsn);
             endPoint.setBase(bsn);
-            endPoint.setNextseqnum(bsn + 1);
-            // inizalize last
-            endPoint.setLast(bsn);
+            endPoint.setNextseqnum(bsn + 1); // initial data packet will be BSN + 1
+            endPoint.setLast(bsn); // No DATA packets yet
 
-            // Add the BSN packet to the endpoint's queue
+            // Create BSN packet
+            GUDPPacket bsnPacket = createPacket(GUDPPacket.TYPE_BSN, bsn, remoteEndPoint);
             endPoint.add(bsnPacket);
+
+            // Add endpoint to sender queue
+            senderQueue.add(endPoint);
         }
 
         /*
@@ -104,18 +99,31 @@ public class GUDPSocket implements GUDPSocketAPI {
          * Create and add the packet as GUDP DATA packet to the endPoint,
          */
 
+        // data packet encaptulation
+        GUDPPacket gudpDataPacket = GUDPPacket.encapsulate(packet);
+        gudpDataPacket.setSeqno(endPoint.getNextseqnum());
+        endPoint.add(gudpDataPacket);
+        endPoint.setLast(endPoint.getNextseqnum());
+        endPoint.setNextseqnum(endPoint.getNextseqnum() + 1);
+
         // Compute next sequence number from endpoint
-        //int nextSeq = endPoint.getNextseqnum();
-        //endPoint.setNextseqnum(nextSeq + 1);
+        // int nextSeq = endPoint.getNextseqnum();
+        // endPoint.setNextseqnum(nextSeq + 1);
 
-        // Here create DATA packet that uses the encapsulate() function
-        GUDPPacket dataPacket = GUDPPacket.encapsulate(packet);
+        // // Here create DATA packet that uses the encapsulate() function
+        // GUDPPacket dataPacket = GUDPPacket.encapsulate(packet);
 
-        // Set the right sequence number for the data packet witch will be 
-        dataPacket.setSeqno(endPoint.getNextseqnum());
+        // // Set the right sequence number for the data packet witch will be
+        // dataPacket.setSeqno(endPoint.getNextseqnum());
 
-        // Add the DATA packet to the endpoint's queue
-        endPoint.add(dataPacket);
+        // // Add the DATA packet to the endpoint's queue
+        // endPoint.add(dataPacket);
+
+        // // only increment last after you have added the packet to the bufferQueue of
+        // the
+        // // end point.
+        // endPoint.setNextseqnum(endPoint.getNextseqnum() + 1);
+        // endPoint.setLast(dataPacket.getSeqno());
 
         /*
          * start the GUDPSender thread if it is not running (i.e, startSender is false),
@@ -127,10 +135,17 @@ public class GUDPSocket implements GUDPSocketAPI {
         if (startSender == false) {
             s.start();
             startSender = true;
+            if (debug) {
+                System.out.println("Started GUDPSender thread");
+            }
         }
+
         if (startReceiver == false) {
             r.start();
             startReceiver = true;
+            if (debug) {
+                System.out.println("Started GUDPReceiver thread");
+            }
         }
     }
 
@@ -272,5 +287,29 @@ public class GUDPSocket implements GUDPSocketAPI {
         startReceiver = false;
 
         datagramSocket.close();
+    }
+
+    private GUDPEndPoint findSenderEndPoint(InetSocketAddress remoteEndPoint) {
+        for (GUDPEndPoint endPoint : senderQueue) {
+            if (endPoint.getRemoteEndPoint().equals(remoteEndPoint)) {
+                return endPoint;
+            }
+        }
+        return null;
+    }
+
+    private GUDPPacket createPacket(short type, int seqNum, InetSocketAddress remoteEndPoint) {
+        // create packet for controlling messages
+        byte[] emptyData = new byte[0];
+        DatagramPacket controlPacket = new DatagramPacket(emptyData, 0, remoteEndPoint);
+
+        try {
+            GUDPPacket gudpPacket = GUDPPacket.encapsulate(controlPacket);
+            gudpPacket.setType(type);
+            gudpPacket.setSeqno(seqNum);
+            return gudpPacket;
+        } catch (IOException e) {
+            throw new RuntimeException("Fail to create packet", e);
+        }
     }
 }
