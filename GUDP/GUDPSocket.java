@@ -85,8 +85,10 @@ public class GUDPSocket implements GUDPSocketAPI {
             endPoint.add(bsnPacket);
 
             if (debug) {
-                System.out.println("GUDPSocket: Created BSN packet with SEQ: " + bsn + " for endpoint "
-                        + remoteEndPoint.toString());
+                System.out.println("GUDPSocket: Created BSN packet with SEQ: " + bsn);
+                System.out.println("GUDPSocket: Endpoint state after BSN -> base=" + endPoint.getBase()
+                        + ", nextseqnum=" + endPoint.getNextseqnum()
+                        + ", last=" + endPoint.getLast());
             }
 
             // Add endpoint to sender queue
@@ -106,9 +108,10 @@ public class GUDPSocket implements GUDPSocketAPI {
         endPoint.setNextseqnum(endPoint.getNextseqnum() + 1);
 
         if (debug) {
-            System.out.println(
-                    "GUDPSocket: Added DATA packet with SEQ: " + gudpDataPacket.getSeqno() + " to endpoint "
-                            + remoteEndPoint.toString());
+            System.out.println("GUDPSocket: Added DATA packet with SEQ: " + gudpDataPacket.getSeqno());
+            System.out.println("GUDPSocket: Endpoint state after DATA -> base=" + endPoint.getBase()
+                    + ", nextseqnum=" + endPoint.getNextseqnum()
+                    + ", last=" + endPoint.getLast());
         }
 
         /*
@@ -178,10 +181,19 @@ public class GUDPSocket implements GUDPSocketAPI {
                 GUDPPacket gpacket = ep.remove(); // try to get one
                 if (gpacket != null) {
 
+                    // Only deliver DATA packets to the application
+                    if (gpacket.getType() != GUDPPacket.TYPE_DATA) {
+                        if (debug) {
+                            System.out.println("GUDPSocket: Skipping non-DATA packet (type="
+                                    + gpacket.getType() + ", seq=" + gpacket.getSeqno()
+                                    + ") from " + ep.getRemoteEndPoint());
+                        }
+                        continue; // skip BSN, FIN, ACK
+                    }
+
                     if (debug) {
-                        System.out.println("GUDPSocket: Received a packet with type: " + gpacket.getType()
-                                + " and SEQ: " + gpacket.getSeqno() + " from endpoint "
-                                + ep.getRemoteEndPoint().toString());
+                        System.out.println("GUDPSocket: Delivering DATA packet with SEQ: "
+                                + gpacket.getSeqno() + " from " + ep.getRemoteEndPoint());
                     }
 
                     gpacket.decapsulate(packet);

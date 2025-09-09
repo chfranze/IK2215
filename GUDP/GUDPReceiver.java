@@ -41,83 +41,120 @@ public class GUDPReceiver extends Thread {
                 InetAddress remoteAddr = remoteSock.getAddress();
                 int remotePort = remoteSock.getPort();
 
+                if (debug)
+                    System.out.println("GUDPReceiver FSM: Received packet type=" + packet.getType() +
+                            " seq=" + packet.getSeqno() + " from " + remoteSock);
+
                 GUDPEndPoint ep = findEndpoint(remoteAddr, remotePort);
 
                 switch (packet.getType()) {
-                    case GUDPPacket.TYPE_ACK:
+                    case GUDPPacket.TYPE_ACK: {
                         int ackSeq = packet.getSeqno();
+                        if (debug)
+                            System.out.println("GUDPReceiver FSM: Processing ACK seq=" + ackSeq);
+
                         for (GUDPEndPoint senderEp : senderQueue) {
                             InetSocketAddress re = senderEp.getRemoteEndPoint();
                             if (re.getAddress().equals(remoteAddr) && re.getPort() == remotePort) {
                                 senderEp.removeAllACK(ackSeq - 1);
                                 senderEp.setBase(ackSeq);
                                 senderEp.setState(GUDPEndPoint.endPointState.RCV);
+                                if (debug)
+                                    System.out.println(
+                                            "GUDPReceiver FSM: Updated sender endpoint Base=" + senderEp.getBase());
                                 s.FSMSender(senderEp);
                                 break;
                             }
                         }
                         break;
+                    }
 
-                    case GUDPPacket.TYPE_BSN:
+                    case GUDPPacket.TYPE_BSN: {
                         int bsnSeq = packet.getSeqno();
                         if (ep == null) {
                             ep = new GUDPEndPoint(remoteAddr, remotePort);
-                            ep.setExpectedseqnum(bsnSeq + 1);
+                            ep.setExpectedseqnum(bsnSeq + 1); // first DATA expected
                             receiverQueue.add(ep);
                             ep.add(packet);
-                            sendACK(ep.getRemoteEndPoint(), ep.getExpectedseqnum());
+                            sendACK(ep.getRemoteEndPoint(), bsnSeq);
+                            if (debug) {
+                                System.out.println("GUDPReceiver FSM: New BSN endpoint added, expected seq="
+                                        + ep.getExpectedseqnum() + " ACK=" + bsnSeq);
+                            }
                         } else if (ep.getFinished()) {
                             ep.clear();
                             ep.setExpectedseqnum(bsnSeq + 1);
                             ep.add(packet);
-                            sendACK(ep.getRemoteEndPoint(), ep.getExpectedseqnum());
+                            sendACK(ep.getRemoteEndPoint(), bsnSeq);
+                            if (debug) {
+                                System.out.println("GUDPReceiver FSM: BSN received, reset finished endpoint");
+                            }
                         } else {
-                            sendACK(ep.getRemoteEndPoint(), ep.getExpectedseqnum());
+                            sendACK(ep.getRemoteEndPoint(), bsnSeq);
+                            if (debug) {
+                                System.out
+                                        .println("GUDPReceiver FSM: BSN received, endpoint exists, sent ACK=" + bsnSeq);
+                            }
                         }
                         break;
+                    }
 
-                    case GUDPPacket.TYPE_DATA:
+                    case GUDPPacket.TYPE_DATA: {
                         if (ep == null) {
                             ep = new GUDPEndPoint(remoteAddr, remotePort);
                             receiverQueue.add(ep);
+                            if (debug)
+                                System.out.println("GUDPReceiver FSM: DATA received for new endpoint");
                         }
 
                         int expected = ep.getExpectedseqnum();
-
-                        // Only accept packet if it's exactly the expected sequence number
                         if (packet.getSeqno() == expected) {
-                            ep.add(packet); // store the packet
-                            ep.setExpectedseqnum(expected + 1); // advance expected
+                            ep.add(packet);
+                            ep.setExpectedseqnum(expected + 1);
+                            if (debug)
+                                System.out.println("GUDPReceiver FSM: DATA accepted seq=" + packet.getSeqno());
                         } else if (packet.getSeqno() > expected) {
-                            // Out-of-order: discard, still ACK current expected
+                            if (debug)
+                                System.out.println("GUDPReceiver FSM: DATA out-of-order seq=" + packet.getSeqno() +
+                                        ", expected=" + expected + ", discarded");
                         }
 
                         sendACK(ep.getRemoteEndPoint(), ep.getExpectedseqnum());
+                        if (debug)
+                            System.out.println("GUDPReceiver FSM: ACK sent seq=" + ep.getExpectedseqnum());
                         break;
+                    }
 
-                    case GUDPPacket.TYPE_FIN:
+                    case GUDPPacket.TYPE_FIN: {
                         if (ep == null) {
                             ep = new GUDPEndPoint(remoteAddr, remotePort);
                             receiverQueue.add(ep);
+                            if (debug)
+                                System.out.println("GUDPReceiver FSM: FIN received for new endpoint");
                         }
 
-                        expected = ep.getExpectedseqnum();
+                        int expected = ep.getExpectedseqnum();
                         if (packet.getSeqno() == expected) {
                             ep.setExpectedseqnum(expected + 1);
                             ep.setFinished(true);
+                            if (debug)
+                                System.out.println("GUDPReceiver FSM: FIN accepted seq=" + packet.getSeqno());
                         }
 
                         sendACK(ep.getRemoteEndPoint(), ep.getExpectedseqnum());
+                        if (debug)
+                            System.out.println("GUDPReceiver FSM: ACK sent for FIN seq=" + ep.getExpectedseqnum());
                         break;
+                    }
 
                     default:
                         if (debug)
-                            System.out.println("Unknown packet type from " + remoteSock);
+                            System.out.println("GUDPReceiver FSM: Unknown packet type from " + remoteSock);
                         break;
                 }
             } catch (IOException e) {
                 if (debug)
-                    System.err.println("GUDPReceiver IOException: " + e.getMessage());
+                    System.err.println("GUDPReceiver FSM IOException: " + e.getMessage());
             }
 
             try {
@@ -128,15 +165,13 @@ public class GUDPReceiver extends Thread {
             }
         }
 
-        // Cleanup
         synchronized (receiverQueue) {
             receiverQueue.clear();
         }
         synchronized (senderQueue) {
             senderQueue.clear();
         }
-
-        System.out.println("GUDPReceiver ended");
+        System.out.println("GUDPReceiver FSM: Receiver ended");
     }
 
     private GUDPEndPoint findEndpoint(InetAddress addr, int port) {
