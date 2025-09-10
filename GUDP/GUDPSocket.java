@@ -102,10 +102,14 @@ public class GUDPSocket implements GUDPSocketAPI {
 
         // data packet encaptulation
         GUDPPacket gudpDataPacket = GUDPPacket.encapsulate(packet);
-        gudpDataPacket.setSeqno(endPoint.getNextseqnum());
+        //gudpDataPacket.setSeqno(endPoint.getNextseqnum());
+        gudpDataPacket.setSeqno(endPoint.getLast()+1);
+
+        endPoint.setLast(gudpDataPacket.getSeqno());
         endPoint.add(gudpDataPacket);
-        endPoint.setLast(endPoint.getNextseqnum());
-        endPoint.setNextseqnum(endPoint.getNextseqnum() + 1);
+
+        //endPoint.setLast(endPoint.getNextseqnum());
+        //endPoint.setNextseqnum(endPoint.getNextseqnum() + 1);
 
         if (debug) {
             System.out.println("GUDPSocket: Added DATA packet with SEQ: " + gudpDataPacket.getSeqno());
@@ -230,6 +234,9 @@ public class GUDPSocket implements GUDPSocketAPI {
             ep.add(finPacket);
             ep.setLast(ep.getNextseqnum());
             ep.setNextseqnum(ep.getNextseqnum() + 1);
+
+            // Change the state of the endpoint to SEND after added packets
+            ep.setState(GUDPEndPoint.endPointState.SEND);
 
             if (debug) {
                 System.out.println("GUDPSocket: Created FIN packet with SEQ: " + finPacket.getSeqno() + " for endpoint "
