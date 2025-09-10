@@ -114,6 +114,9 @@ public class GUDPSocket implements GUDPSocketAPI {
                     + ", last=" + endPoint.getLast());
         }
 
+        // Change the state of the endpoint to SEND after added packets
+        endPoint.setState(GUDPEndPoint.endPointState.SEND);
+
         /*
          * start the GUDPSender thread if it is not running (i.e, startSender is false),
          * also start the GUDPReceiver thread if it is not running (startReceiver is
