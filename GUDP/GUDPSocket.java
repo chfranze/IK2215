@@ -107,6 +107,7 @@ public class GUDPSocket implements GUDPSocketAPI {
 
         endPoint.setLast(gudpDataPacket.getSeqno());
         endPoint.add(gudpDataPacket);
+        endPoint.setState(GUDPEndPoint.endPointState.SEND);
 
         // endPoint.setLast(endPoint.getNextseqnum());
         // endPoint.setNextseqnum(endPoint.getNextseqnum() + 1);
@@ -117,9 +118,6 @@ public class GUDPSocket implements GUDPSocketAPI {
                     + ", nextseqnum=" + endPoint.getNextseqnum()
                     + ", last=" + endPoint.getLast());
         }
-
-        // Change the state of the endpoint to SEND after added packets
-        endPoint.setState(GUDPEndPoint.endPointState.SEND);
 
         /*
          * start the GUDPSender thread if it is not running (i.e, startSender is false),
@@ -235,8 +233,6 @@ public class GUDPSocket implements GUDPSocketAPI {
             ep.add(finPacket);
             ep.setLast(finSeq);
             ep.setNextseqnum(finSeq + 1);
-
-            // Change the state of the endpoint to SEND after added packets
             ep.setState(GUDPEndPoint.endPointState.SEND);
 
             if (debug) {
@@ -337,17 +333,27 @@ public class GUDPSocket implements GUDPSocketAPI {
     }
 
     private GUDPPacket createPacket(short type, int seqNum, InetSocketAddress remoteEndPoint) {
-        // create packet for controlling messages
-        byte[] emptyData = new byte[0];
-        DatagramPacket controlPacket = new DatagramPacket(emptyData, 0, remoteEndPoint);
-
         try {
-            GUDPPacket gudpPacket = GUDPPacket.encapsulate(controlPacket);
-            gudpPacket.setType(type);
+            // Create an empty UDP packet to hold the metadata
+            byte[] content = new byte[0]; // empty payload
+            DatagramPacket udpPacket = new DatagramPacket(content, content.length, remoteEndPoint);
+
+            // Allocate buffer for GUDP packet
+            ByteBuffer bb = ByteBuffer.allocate(content.length + GUDPPacket.HEADER_SIZE);
+            bb.order(ByteOrder.BIG_ENDIAN);
+
+            // Create GUDPPacket
+            GUDPPacket gudpPacket = new GUDPPacket(bb);
+            gudpPacket.setPayload(udpPacket.getData());
+            gudpPacket.setPayloadLength(0);
+            gudpPacket.setVersion(GUDPPacket.GUDP_VERSION);
             gudpPacket.setSeqno(seqNum);
+            gudpPacket.setType(type);
+            gudpPacket.setSocketAddress(remoteEndPoint);
+
             return gudpPacket;
-        } catch (IOException e) {
-            throw new RuntimeException("Fail to create packet", e);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create packet", e);
         }
     }
 }
