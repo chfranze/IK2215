@@ -78,13 +78,15 @@ public class GUDPSocket implements GUDPSocketAPI {
             // bsnPacket.setSeqno(bsn);
             endPoint.setBase(bsn);
             endPoint.setNextseqnum(bsn); // initial data packet will be BSN + 1
-            endPoint.setLast(bsn); // No DATA packets yet
-
-
 
             // Create BSN packet
             GUDPPacket bsnPacket = createPacket(GUDPPacket.TYPE_BSN, bsn, remoteEndPoint);
             endPoint.add(bsnPacket);
+
+            endPoint.setLast(bsn); // No DATA packets yet
+
+
+
 
             if (debug) {
                 System.out.println("GUDPSocket: Created BSN packet with SEQ: " + bsn);
@@ -107,8 +109,9 @@ public class GUDPSocket implements GUDPSocketAPI {
         // gudpDataPacket.setSeqno(endPoint.getNextseqnum());
         gudpDataPacket.setSeqno(endPoint.getLast() + 1);
 
-        endPoint.setLast(gudpDataPacket.getSeqno());
         endPoint.add(gudpDataPacket);
+
+        endPoint.setLast(gudpDataPacket.getSeqno());
         endPoint.setState(GUDPEndPoint.endPointState.SEND);
 
         // endPoint.setLast(endPoint.getNextseqnum());
