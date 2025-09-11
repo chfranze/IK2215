@@ -57,7 +57,6 @@ public class GUDPSender extends Thread {
                         e.printStackTrace();
                 }
 
-                // ConcurrentLinkedQueue iterator doesn't support remove(); use remove(ep)
                 if (ep.getFinished() && ep.isEmptyQueue()) {
                     boolean removed = senderQueue.remove(ep);
                     if (removed && debug)
@@ -72,10 +71,17 @@ public class GUDPSender extends Thread {
             }
         }
 
-        // ensure queue cleared when stopping so finish() won't hang
+        // After runFlag is false
+        GUDPEndPoint ep;
+        while ((ep = senderQueue.poll()) != null) { // removes head safely
+            ep.stopTimer(); // stop timers
+            if (debug)
+                System.out.println("GUDPSender: removed endpoint " + ep.getRemoteEndPoint());
+        }
+
         senderQueue.clear();
-        if (debug)
-            System.out.println("GUDPSender ended");
+
+        System.out.println("GUDPSender ended");
     }
 
     public void FSMSender(GUDPEndPoint endPoint) {
@@ -105,9 +111,9 @@ public class GUDPSender extends Thread {
                 /*
                  * Correct send policy:
                  * - send all packets in the send window [base, min(last, base+window-1)]
-                 *   This ensures BSN (at seq=base) is transmitted even when nextseqnum==base+1.
+                 * This ensures BSN (at seq=base) is transmitted even when nextseqnum==base+1.
                  * - After attempting to send up to sendLimit, advance nextseqnum to sendLimit+1
-                 *   if it wasn't already that large.
+                 * if it wasn't already that large.
                  */
                 int base = endPoint.getBase();
                 int last = endPoint.getLast();
