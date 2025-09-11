@@ -164,28 +164,30 @@ public class GUDPSender extends Thread {
 
             case RCV: {
                 if (debug)
-                    System.out.println("RCV State: Base=" + endPoint.getBase() + " Next=" + endPoint.getNextseqnum());
+                    System.out.println("RCV State: Base=" + endPoint.getBase() +
+                            " Next=" + endPoint.getNextseqnum());
 
                 try {
-                    if (endPoint.getBase() == endPoint.getNextseqnum() || endPoint.getBase() > endPoint.getLast()) {
-                        try {
-                            endPoint.stopTimer();
-                        } catch (Exception ignored) {
+                    if (endPoint.getBase() > endPoint.getLast()) {
+                        // all packets including FIN acked
+                        endPoint.stopTimer();
+                        endPoint.setRetry(0);
+                        endPoint.setFinished(true); // <-- mark endpoint done!
+                        if (debug) {
+                            System.out.println("GUDPSender: all packets including FIN acked for " +
+                                    endPoint.getRemoteEndPoint());
                         }
+
+                    } else if (endPoint.getBase() == endPoint.getNextseqnum()) {
+                        endPoint.stopTimer();
                         endPoint.setRetry(0);
                     } else {
-                        // restart timer for oldest unacked
-                        try {
-                            endPoint.stopTimer();
-                        } catch (Exception ignored) {
-                        }
-                        try {
-                            endPoint.startTimer();
-                        } catch (Exception ignored) {
-                        }
+                        endPoint.stopTimer();
+                        endPoint.startTimer();
                     }
-                } catch (NullPointerException ignored) {
+                } catch (Exception ignored) {
                 }
+
                 endPoint.setState(GUDPEndPoint.endPointState.WAIT);
                 break;
             }
