@@ -37,7 +37,6 @@ public class GUDPSender extends Thread {
      */
     public void stopGUDPSender() {
         this.runFlag = false;
-        this.interrupt();
     }
 
     @Override
@@ -47,7 +46,6 @@ public class GUDPSender extends Thread {
             Iterator<GUDPEndPoint> iterator = senderQueue.iterator();
             while (iterator.hasNext()) {
                 GUDPEndPoint ep = iterator.next();
-
                 try {
                     FSMSender(ep);
                 } catch (Exception e) {
@@ -57,10 +55,15 @@ public class GUDPSender extends Thread {
                         e.printStackTrace();
                 }
 
-                if (ep.getFinished() && ep.isEmptyQueue()) {
-                    boolean removed = senderQueue.remove(ep);
-                    if (removed && debug)
-                        System.out.println("GUDPSender: removed endpoint " + ep.getRemoteEndPoint());
+                // if (ep.getFinished() && ep.isEmptyQueue()) {
+                // boolean removed = senderQueue.remove(ep);
+                // senderQueue.remove(ep)
+                // if (removed && debug)
+                // System.out.println("GUDPSender: removed endpoint " + ep.getRemoteEndPoint());
+                // }
+                if (ep.getFinished()) {
+                    senderQueue.remove(ep);
+                    System.out.println("GUDPSender: removed endpoint " + ep.getRemoteEndPoint());
                 }
             }
 
