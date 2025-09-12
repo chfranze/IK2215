@@ -61,7 +61,7 @@ public class GUDPSender extends Thread {
                 // if (removed && debug)
                 // System.out.println("GUDPSender: removed endpoint " + ep.getRemoteEndPoint());
                 // }
-                if (ep.getFinished()) {
+                if (ep.getFinished() && ep.isEmptyQueue()) {
                     senderQueue.remove(ep);
                     System.out.println("GUDPSender: removed endpoint " + ep.getRemoteEndPoint());
                 }
@@ -125,11 +125,8 @@ public class GUDPSender extends Thread {
 
                 for (int seq = base; seq <= sendLimit; seq++) {
                     GUDPPacket pkt = endPoint.getPacket(seq);
-                    if (pkt == null) {
-                        if (debug)
-                            System.out.println("SEND: No packet for seq=" + seq + " (skipped)");
+                    if (pkt == null)
                         continue;
-                    }
 
                     try {
                         DatagramPacket udpPkt = pkt.pack();
@@ -142,7 +139,9 @@ public class GUDPSender extends Thread {
                             System.out.println("SEND seq=" + pkt.getSeqno() + " to " + dest +
                                     " Base=" + endPoint.getBase() + " Next=" + endPoint.getNextseqnum());
 
-                        // start timer for the oldest unacked packet
+                        // increment nextseqnum after actually sending
+                        endPoint.setNextseqnum(seq + 1);
+
                         if (seq == base) {
                             try {
                                 endPoint.startTimer();
@@ -153,6 +152,7 @@ public class GUDPSender extends Thread {
                         System.err.println("SEND IOException: " + e.getMessage());
                     }
                 }
+                endPoint.setState(GUDPEndPoint.endPointState.WAIT);
 
                 // Advance nextseqnum to reflect that we've tried to send through sendLimit
                 int newNext = Math.max(endPoint.getNextseqnum(), sendLimit + 1);
