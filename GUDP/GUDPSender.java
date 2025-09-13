@@ -57,7 +57,8 @@ public class GUDPSender extends Thread {
                 FSMSender(ep);
 
                 if (ep.getFinished() && ep.isEmptyQueue()) {
-                    senderQueue.remove(ep);
+                    ep.stopTimer(); // stop before removing
+                    iterator.remove(); // safe removal
                     if (debug) {
                         System.out.println("GUDPSender: removed endpoint " + ep.getRemoteEndPoint());
                     }
