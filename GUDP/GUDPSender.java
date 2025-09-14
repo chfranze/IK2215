@@ -58,7 +58,7 @@ public class GUDPSender extends Thread {
 
                 if (ep.getFinished() && ep.isEmptyQueue()) {
                     ep.stopTimer(); // stop before removing
-                    iterator.remove(); // safe removal
+                    senderQueue.remove(ep); // safe removal for ConcurrentLinkedQueue
                     if (debug) {
                         System.out.println("GUDPSender: removed endpoint " + ep.getRemoteEndPoint());
                     }
@@ -88,7 +88,6 @@ public class GUDPSender extends Thread {
             }
         }
 
-        senderQueue.clear();
         System.out.println("GUDPSender ended");
     }
 
