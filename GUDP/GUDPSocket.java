@@ -16,7 +16,7 @@ public class GUDPSocket implements GUDPSocketAPI {
                                                        // (remoteEndPoint)
     GUDPSender s; // Thread sending packets from send queues to destinations
     GUDPReceiver r; // Thread receiving packets and putting them into corresponding receive queues
-    private boolean debug = true;
+    private boolean debug = false;
     private boolean startSender = false; // set to true after starting GUDPSender
     private boolean startReceiver = false; // set to true after starting GUDPReceiver
 

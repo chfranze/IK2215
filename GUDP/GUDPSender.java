@@ -12,7 +12,7 @@ public class GUDPSender extends Thread {
     private final DatagramSocket sock;
     private final ConcurrentLinkedQueue<GUDPEndPoint> senderQueue;
     private boolean runFlag = true;
-    private boolean debug = true; // set to print message for testing purpose
+    private boolean debug = false; // set to print message for testing purpose
 
     private enum drop { // use for test dropping different type of packets
         NOTHING,
